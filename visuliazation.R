@@ -1,3 +1,6 @@
+
+
+
 #1.What are the basic summary statistics for the dataset?
 # Load necessary libraries
 library(ggplot2)
@@ -44,7 +47,7 @@ country_data <- covid_data %>%
             total_deaths = sum(total_deaths, na.rm = TRUE),
             population = first(population)) %>%
   arrange(desc(total_cases))
-
+country_data
 # Top 10 countries by cases
 top_10_countries <- country_data %>% top_n(10, total_cases)
 
@@ -57,6 +60,7 @@ ggplot(top_10_countries, aes(x = reorder(location, -total_cases), y = total_case
 #4.
 # Calculate Case Fatality Rate (CFR)
 country_data <- country_data %>%
+  filter(!is.na(continent)) %>% 
   mutate(cfr = (total_deaths / total_cases) * 100)
 
 # Scatter plot: Cases vs. CFR
@@ -75,6 +79,8 @@ country_data <- country_data %>%
 # Choropleth map (using the 'maps' package)
 library(maps)
 world_map <- map_data("world")
+world_map
+country_data
 country_data_map <- merge(world_map, country_data, by.x = "region", by.y = "country")
 
 # Plot cases per million by country
@@ -100,7 +106,7 @@ continent_data <- final_data %>%
   filter(!is.na(continent)) %>%
   group_by(continent) %>% 
   summarise(total_cases_sum = sum(total_cases_max, na.rm = TRUE),
-            +             total_deaths_sum = sum(total_deaths_max, na.rm = TRUE))
+                         total_deaths_sum = sum(total_deaths_max, na.rm = TRUE))
 continent_data
 
 ggplot(continent_data, aes(x = continent, y = total_cases_sum, fill = continent)) +
@@ -232,11 +238,4 @@ ggplot(covid_data, aes(x = total_tests_per_thousand, y = positive_rate)) +
   labs(title = "COVID-19 Testing Rates vs. Positive Cases", x = "Total Tests per Thousand", y = "Positive Rate (%)") +
   geom_smooth(method = "lm", col = "red") +
   theme_minimal()
-
-
-
-
-
-
-
 

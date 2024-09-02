@@ -1,0 +1,520 @@
+---
+title: "Covid_visual"
+author: "Qiuyi Feng"
+date: "2024-08-30"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+---
+title: "Covid_visulization"
+format: html
+editor: visual
+---
+
+### The origin data is collected in https://ourworldindata.org/covid-deaths ,which contains 67 variables and 429435 rows that show the covid-19 data in all locations from 2020 to today.
+
+## load data
+
+# Load necessary libraries
+
+```{r}
+library(ggplot2) 
+library(dplyr)
+```
+
+```{r}
+covid_data <- read.csv("covid_data.csv")  
+```
+
+# create some tables from covid_data that are useful in later visulazations.
+
+```{r}
+daily_data <- covid_data %>%
+  group_by(date) %>%
+  summarize(across(where(is.numeric), sum, na.rm = TRUE))
+daily_data$date <- as.Date(daily_data$date)
+  head(daily_data)
+```
+
+```{r}
+country_data <- covid_data %>%
+  filter(!location %in% c("World", "High-income countries", "Upper-middle-income countries",                          "European Union (27)", "North America", "Lower-middle-income countries", "South America", "Asia", "Europe", "Africa", "Oceania")) %>% 
+   select(-contains("new"),-contains('date')) %>% 
+  group_by(location) %>%
+  summarize(
+    across(
+      where(is.numeric), max, na.rm = TRUE  # Sum all numeric columns
+    ),
+    across(
+      where(is.character), first  # Keep the first entry for character columns
+    )
+  ) %>% 
+  arrange(desc(total_cases))
+head(country_data)
+```
+```{r}
+continent_data <- covid_data %>%
+  filter(location %in% c("Asia", "Europe", "Africa", "North America", "South America", "Oceania")) %>% 
+ select(-contains("new"),-contains('date')) %>% 
+  group_by(location) %>%
+  summarize(
+    across(
+      where(is.numeric), max, na.rm = TRUE  # Sum all numeric columns
+    ),
+    across(
+      where(is.character), first  # Keep the first entry for character columns
+    )
+  ) %>% 
+  arrange(desc(total_cases))
+  continent_data
+```
+```{r}
+Income_data <- covid_data %>%
+  filter(location %in% c("High-income countries", "Upper-middle-income countries", 
+                         "Lower-middle-income countries", "Low-income countries")) %>% 
+  select(-contains("new"),-contains('date')) %>% 
+  group_by(location) %>%
+  summarize(
+    across(
+      where(is.numeric), max, na.rm = TRUE  # Sum all numeric columns
+    ),
+    across(
+      where(is.character), first  # Keep the first entry for character columns
+    )
+  ) %>% 
+  arrange(desc(total_cases))
+  Income_data
+```
+
+
+## 2.Show the basic data in time series
+
+# Time series plot for cases and deaths
+
+```{r}
+library(scales)
+```
+
+```{r}
+# Create the plot
+ggplot(daily_data, aes(x = date)) +
+  geom_line(aes(y = new_cases, color = "New Cases")) +   # Plot new cases
+  geom_area(aes(y = new_cases_smoothed, fill = "New Cases_smoothed")) +
+  labs(title = "Daily Changes in New Cases", 
+       x = "Date", 
+       y = "Count") +
+  scale_color_manual("", values = c("New Cases" = "blue")) +
+   scale_fill_manual("", values = c("New Cases_smoothed" = "purple")) +
+  scale_y_continuous(labels = comma) +  # Use comma formatting for y-axis
+  theme_minimal()
+
+
+```
+
+```{r}
+ggplot(daily_data, aes(x = date)) +
+  geom_line(aes(y = new_deaths, color = "New Deaths")) +   # Plot new cases
+geom_area(aes(y = new_deaths_smoothed, fill = "New Deaths_smoothed")) +   # Plot new cases
+  labs(title = "Daily Changes in New Deaths", 
+       x = "Date", 
+       y = "Count") +
+  scale_color_manual("", values = c("New Deaths" = "red")) +
+  scale_fill_manual("",values = c("New Deaths_smoothed" ="yellow" ))+
+    scale_y_continuous(labels = comma) +  # Use comma formatting for y-axis
+  theme_minimal()
+```
+```{r}
+ggplot(daily_data, aes(x = date)) +
+  geom_area(aes(y = total_deaths, fill = "Total Deaths"),alpha=0.4) +   # Plot new cases
+
+  labs(title = "Daily Changes in Total Deaths", 
+       x = "Date", 
+       y = "Count") +
+  scale_fill_manual("", values = c("Total Deaths" = "orange")) +
+    scale_y_continuous(labels = comma) +  # Use comma formatting for y-axis
+  theme_minimal()
+```
+```{r}
+ggplot(daily_data, aes(x = date)) +
+  geom_area(aes(y = total_cases, fill = "Total Cases"),alpha=0.4) +   # Plot new cases
+  labs(title = "Daily Changes in Total Cases", 
+       x = "Date", 
+       y = "Count") +
+  scale_fill_manual("", values = c("Total Cases" = "red")) +
+    scale_y_continuous(labels = comma) +  # Use comma formatting for y-axis
+  theme_minimal()
+```
+
+
+## 3.find the Top10 countries that have the most cases
+
+# Top 10 countries by cases
+
+```{r}
+top_10_countries <- country_data %>%
+  top_n(10, total_cases)
+top_10_countries
+```
+
+
+# Bar chart for top 10 countries
+
+```{r}
+ggplot(top_10_countries, aes(x = reorder(location, -total_cases), y = total_cases)) + geom_bar(stat = "identity", fill = "blue") + 
+  labs(title = "Top 10 Countries by COVID-19 Cases", x = "Country", y = "Total Cases") +
+   scale_y_continuous(labels = comma) +  # Use comma formatting for y-axis
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+## 4.find the relationship between deaths number and medical resources
+
+# COVID-19 Total Deaths vs. ICU_per_million
+```{r}
+country_data_clean <- country_data %>%
+  filter(total_deaths_per_million != -Inf, icu_patients_per_million != -Inf,hosp_patients_per_million !=-Inf)
+ggplot(data = country_data_clean, aes( y = total_deaths_per_million, x = icu_patients_per_million)) + geom_point(color="red")+
+  labs(title = "COVID-19 Total Deaths vs. ICU_per_million", y = "Total Deaths", x = "icu_per_million") +
+  
+  scale_size_continuous(name = "Population")
+```
+
+# Classify the data by continent and draw a regression graph
+```{r}
+
+ggplot(data = country_data_clean, aes( y = total_deaths_per_million, x = icu_patients_per_million, color = continent)) + 
+  geom_point()+
+  geom_smooth(method = "lm", se = TRUE, color = "blue")
+  labs(title = "COVID-19 Total Deaths vs. ICU_per_million", y = "Total Deaths", x = "icu_per_million") +
+  scale_size_continuous(name = "Population")
+```
+# COVID-19 Total Deaths vs. Hopital_per_million
+
+```{r}
+ggplot(data = country_data_clean, aes( y = total_deaths_per_million, x = hosp_patients_per_million, color = continent)) + 
+  geom_point()+
+  geom_smooth(method = "lm", se = TRUE, color = "blue")
+  labs(title = "COVID-19 Total Deaths vs. Hopital_per_million", y = "Total Deaths_per_million", x = "hospital_per_million") +
+  scale_size_continuous(name = "Population")
+```
+
+
+## 4. Calculate Case Fatality Rate (CFR)
+```{r}
+ country_data <- country_data %>%
+  mutate(cfr = (total_deaths / total_cases) * 100)
+```
+# Scatter plot: Cases vs. CFR
+
+```{r}
+ggplot(country_data, aes(x = total_cases, y = cfr)) +
+  geom_point(aes(size = population), color = "red") +
+  geom_smooth(method = "lm", se = TRUE, color = "orange")+
+  labs(title = "COVID-19 Cases vs. Case Fatality Rate", x = "Total Cases", y = "Case Fatality Rate (%)") +
+  scale_size_continuous(name = "Population")
+```
+
+```{r}
+filter(country_data, grepl("United States",location))
+```
+
+
+## 5.Calculate cases per million in the world map 
+```{r}
+country_data_map <- country_data %>%
+  mutate(severity_ratio = total_deaths_per_million / total_cases_per_million) %>% 
+  arrange(severity_ratio)
+
+```
+
+```{r}
+library(maps)
+library(viridis)
+world <- map_data("world")
+map_data_joined <- world %>%
+  left_join(country_data_map, by = c("region" = "location"))
+
+
+```
+
+# Plot cases per million by country
+
+
+```{r}
+ggplot(map_data_joined, aes(x = long, y = lat, group = group)) +
+  geom_polygon(aes(fill = severity_ratio), color = "black") +
+  scale_fill_viridis(name = "Severity Ratio", na.value = "white", option = "C") +
+  labs(title = "Global COVID-19 Severity by Country",
+       subtitle = "Severity Ratio: Total Deaths per Million / Total Cases per Million") +
+  theme_void() +
+  theme(legend.position = "bottom")
+```
+
+
+## 6.Find out the cases and deaths data from different continents
+
+#. counstruct the new continent data
+```{r}
+final_data <- covid_data %>%
+  filter(total_cases != -Inf, total_deaths != -Inf,!is.na(continent)) %>% 
+  
+  group_by(location) %>%
+  summarize(
+    total_cases_max = max(total_cases, na.rm = TRUE),
+    total_deaths_max = max(total_deaths, na.rm = TRUE),
+    across(everything(), first)
+  ) 
+
+continent_data <- final_data %>%
+  filter(!is.na(continent)) %>%
+  group_by(continent) %>% 
+  summarise(total_cases_sum = sum(total_cases_max, na.rm = TRUE),
+                         total_deaths_sum = sum(total_deaths_max, na.rm = TRUE))
+continent_data
+```
+
+# Draw the "COVID-19 Cases by Continent" chart.
+
+```{r}
+ggplot(continent_data, aes(x = continent, y = total_cases_sum, fill = continent)) +
+  geom_bar(stat = "identity") + 
+  labs(title = "COVID-19 Cases by Continent", x = "Continent", y = "Total Cases") +
+  facet_wrap(~continent, scales = "free") + theme(legend.position = "none")
+```
+
+# Draw the "COVID-19 Deaths by Continent" chart
+
+```{r}
+ggplot(continent_data, aes(x = continent, y = total_deaths_sum, fill = continent)) +
+  geom_bar(stat = "identity") +
+  labs(title = "COVID-19 Deaths by Continent", x = "Continent", y = "Total Cases") +
+  facet_wrap(~continent, scales = "free") + 
+  theme(legend.position = "none")
+```
+# clear the NA and Null values in continent.
+```{r}
+country_data <- country_data[!is.na(country_data$continent) & country_data$continent != "", ]
+continent_data
+```
+# Compare the data between Total Tests and Total Vaccinations.
+```{r}
+# 创建柱状图并按洲分开展示
+ggplot(country_data, aes(x = factor(1))) +
+  geom_bar(aes(y = total_tests, fill = "Total Tests"), stat = "identity", position = "dodge") + 
+  geom_bar(aes(y = total_vaccinations, fill = "Total Vaccinations"), stat = "identity", position = "dodge") + 
+  labs(title = "Comparison of Total Cases Metrics by Continent", 
+       x = "Metrics", 
+       y = "Count（million）") +
+  scale_fill_manual(values = c("Total Tests" = "blue", 
+                               "Total Vaccinations" = "red")) +  
+  scale_y_continuous(
+    labels = scales::comma_format(scale = 1e-6),   # 将 y 轴转换为 100,000 的形式
+    sec.axis = sec_axis(~./max(country_data$total_tests) * 100,  # 创建右侧的百分比轴
+                        name = "Percentage of Total Tests")
+  ) +
+  theme_minimal() +
+  facet_wrap(~continent)  # 按洲分开绘制子图
+```
+
+
+
+## 7."Vaccination Rate vs. New COVID-19 Cases"
+```{r}
+vacc_final_data <- covid_data %>% 
+  filter(total_cases != -Inf, total_vaccinations != -Inf) %>%
+  group_by(location) %>%
+  summarize( total_cases_max = max(total_cases, na.rm = TRUE), total_vaccinations_max = max(total_vaccinations, na.rm = TRUE) )
+```
+```{r}
+ggplot(vacc_final_data, aes(x =total_vaccinations_max, y = total_cases_max)) +
+  geom_point(color = "blue") + 
+  labs(title = "Vaccination Rate vs. New COVID-19 Cases", x = "Vaccination Rate (%)", y = "New Cases")+
+  geom_smooth(method = "lm", col = "red") + 
+  theme_minimal()
+```
+# the relationship is positive! It confused me at first, but later I realized that for most Vaccines can not prevent the highly rapidly mutating virus. The high Vaccination rate can reflect the poopulation density and Total Population, which leads to high cases.
+
+
+## 8.forcast the new cases nowadays.
+# Load necessary library for time series 
+```{r}
+library(forecast)
+```
+# Convert data to time series
+
+```{r}
+daily_data <- daily_data[daily_data$date <= as.Date("2024-06-01"), ]
+ts_data <- ts(daily_data$total_cases, start = c(2020, as.numeric(format(min(daily_data$date), "%j"))), frequency = 365)
+ fit <- auto.arima(ts_data)
+ forecast_cases <- forecast(fit, h = 30)
+ autoplot(forecast_cases) +
+labs(title = "COVID-19 Case Forecasting", x = "Date", y = "Predicted Cases") +
+autolayer(ts_data, series = "Actual Cases")
+```
+
+## 9. find the relationship between Population density and total cases 
+
+# Delete some outliers
+
+```{r}
+
+Q1 <- quantile(final_data$total_deaths, 0.25, na.rm = TRUE)
+Q3 <- quantile(final_data$total_deaths, 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR 
+upper_bound <- Q3 + 1.5 * IQR
+outliers <- final_data$total_deaths[final_data$total_deaths < lower_bound | final_data$total_deaths > upper_bound] 
+outliers
+
+final_data %>% filter(total_deaths < lower_bound | total_deaths > upper_bound)
+final_data_no_outliers <- final_data %>% 
+  filter(total_deaths >= lower_bound & total_deaths <= upper_bound)
+```
+
+
+# Scatter plot: Population density vs. total cases
+
+```{r}
+ggplot(final_data, aes(x = population_density, y = total_deaths_per_million)) +
+  geom_point(color = "darkblue") + labs(title = "Population Density vs. Total COVID-19 Cases", x = "Population Density (people per sq. km)", y = "Total Cases") +
+  geom_smooth(method = "lm", col = "red") + theme_minimal()+ ylim(0, max(final_data_no_outliers$total_deaths, na.rm = TRUE)) 
+```
+
+## 10.Calculate  stringency index
+
+# Aggregate data by continent and date, calculate average stringency index
+
+```{r}
+covid_data_filtered <- covid_data %>%
+  filter(date <= as.Date("2023-12-31"), continent != "" )
+
+stringency_data <- covid_data_filtered %>%
+  group_by(continent, date) %>% 
+  summarise(avg_stringency = mean(stringency_index, na.rm = TRUE))
+stringency_data
+```
+
+
+
+# Plot: Stringency index over time by continent
+
+```{r}
+ggplot(stringency_data, aes(x = date, y = avg_stringency, color = continent)) +
+  geom_line() +
+  labs(title = "Stringency Index Over Time by Continent", x = "Date", y = "Average Stringency Index") + 
+  theme_minimal()
+
+```
+# there is no data in 2024 from our origin data here.
+
+
+
+## 11 "COVID-19 Testing Rates vs. Positive Cases"
+
+
+```{r}
+ggplot(covid_data, aes(x = total_tests_per_thousand, y = positive_rate)) +
+  geom_point(color = "orange") +
+  labs(title = "COVID-19 Testing Rates vs. Positive Cases", x = "Total Tests per Thousand", y = "Positive Rate (%)") + 
+  geom_smooth(method = "lm", col = "red") + 
+  theme_minimal()
+```
+
+## 12.Age distribution in continents_data
+
+```{r}
+library(tidyr)
+```
+
+
+```{r}
+covid_data$date <- as.Date(covid_data$date)
+
+
+covid_data_long <- covid_data %>%
+  select(continent, date, median_age, aged_65_older, aged_70_older) %>%
+  pivot_longer(cols = c(median_age, aged_65_older, aged_70_older), 
+               names_to = "variable", 
+               values_to = "value")
+
+ggplot(covid_data_long, aes(x = date, y = value, color = continent)) +
+  geom_line() +
+  facet_wrap(~ variable, scales = "free_y") +
+  labs(title = "Variables Over Time by Continent",
+       x = "Date",
+       y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+## 13. "Area Chart of Excess Mortality Variables"
+
+```{r}
+
+
+covid_data_area <- covid_data %>%
+  select(date, excess_mortality_cumulative_absolute, 
+      ) %>%
+  pivot_longer(cols = c(excess_mortality_cumulative_absolute, 
+                        ), 
+               names_to = "variable", 
+               values_to = "value")
+
+
+ggplot(covid_data_area, aes(x = date, y = value, fill = variable)) +
+  geom_area() +
+  labs(title = "Stacked Area Chart of Excess Mortality Variables",
+       x = "Date",
+       y = "Value") +
+  theme_minimal()
+
+```
+## 14. The new cases and deaths in different income countries
+
+```{r}
+
+covid_data_filtered <- covid_data %>%
+  filter(date <= as.Date("2021-12-31"), location %in% c("High-income countries", "Upper-middle-income countries", "Lower-middle-income countries", "Low-income countries"))
+
+covid_data_new <- covid_data_filtered %>%
+  select(location, date, new_cases) %>%
+  pivot_longer(cols = c(new_cases), 
+               names_to = "variable", 
+               values_to = "value")
+
+ggplot(covid_data_new, aes(x = date, y = value, color = variable)) +
+  geom_line() +
+  facet_wrap(~ location) +
+  labs(title = "New Cases and New Deaths by Income Category",
+       x = "Date",
+       y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+```{r}
+
+covid_data_filtered <- covid_data %>%
+  filter(date <= as.Date("2021-12-31"), location %in% c("High-income countries", "Upper-middle-income countries", "Lower-middle-income countries", "Low-income countries"))
+
+covid_data_new <- covid_data_filtered %>%
+  select(location, date, new_deaths) %>%
+  pivot_longer(cols = c(new_deaths), 
+               names_to = "variable", 
+               values_to = "value")
+
+
+ggplot(covid_data_new, aes(x = date, y = value, color = variable)) +
+  geom_line() +
+  facet_wrap(~ location) +
+  labs(title = "New Cases and New Deaths by Income Category",
+       x = "Date",
+       y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+
